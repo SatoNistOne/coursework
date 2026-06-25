@@ -557,19 +557,28 @@ BEGIN
         RAISE EXCEPTION 'Получатель не может брать книги. %', v_reason;
     END IF;
 
-    INSERT INTO transfers
-        (copy_id, from_user_id, to_user_id, drop_point_id, note, condition_at_transfer)
-    VALUES
-        (p_copy_id, p_from_user_id, p_to_user_id, p_drop_point_id, p_note, p_condition_at_handoff);
+    SAVEPOINT before_insert;
 
-    RAISE NOTICE 'Книга "%" передана пользователю ID %', v_book_title, p_to_user_id;
+    BEGIN
+        INSERT INTO transfers
+            (copy_id, from_user_id, to_user_id, drop_point_id, note, condition_at_transfer)
+        VALUES
+            (p_copy_id, p_from_user_id, p_to_user_id, p_drop_point_id, p_note, p_condition_at_handoff);
+
+        RAISE NOTICE 'Книга "%" передана пользователю ID %', v_book_title, p_to_user_id;
+    EXCEPTION
+        WHEN OTHERS THEN
+            ROLLBACK TO SAVEPOINT before_insert;
+            RAISE EXCEPTION 'Ошибка при вставке передачи: %', SQLERRM;
+    END;
+
 EXCEPTION
     WHEN foreign_key_violation THEN
         RAISE EXCEPTION 'Несуществующий пользователь или точка обмена';
     WHEN check_violation THEN
         RAISE EXCEPTION 'Нарушение ограничения данных';
     WHEN OTHERS THEN
-        RAISE EXCEPTION 'Ошибка при передаче (copy_id=%)', p_copy_id;
+        RAISE EXCEPTION 'Ошибка при передаче (copy_id=%): %', p_copy_id, SQLERRM;
 END;
 $$;
 
@@ -614,7 +623,7 @@ BEGIN
         v_book_title, v_unique_code, COALESCE(p_reason, 'не указана'), p_reported_by;
 EXCEPTION
     WHEN OTHERS THEN
-        RAISE EXCEPTION 'Ошибка при изменении статуса';
+        RAISE EXCEPTION 'Ошибка при изменении статуса: %', SQLERRM;
 END;
 $$;
 
@@ -673,17 +682,17 @@ INSERT INTO drop_points (name, address, city, latitude, longitude, is_active) VA
 ('КФУ, главный холл',      'ул. Кремлёвская, 18', 'Казань',          55.798525, 49.106396, TRUE),
 ('Книжный клуб «Буква»',   'Невский пр., 46',     'Санкт-Петербург', 59.932946, 30.344449, FALSE);
 
-INSERT INTO book_copies (book_id, registered_by, status, condition, unique_code) VALUES
-(1, 1, 'available', 'good', 'BC-2024-0001'),
-(2, 1, 'available', 'fair', 'BC-2024-0002'),
-(3, 3, 'available', 'new',  'BC-2024-0003'),
-(4, 2, 'available', 'good', 'BC-2024-0004'),
-(5, 4, 'available', 'good', 'BC-2024-0005'),
-(1, 5, 'available', 'poor', 'BC-2024-0006'),
-(6, 6, 'available', 'good', 'BC-2024-0007'),
-(7, 3, 'available', 'new',  'BC-2024-0008'),
-(2, 4, 'taken',     'poor', 'BC-2024-0009'),
-(4, 1, 'available', 'fair', 'BC-2024-0010');
+INSERT INTO book_copies (book_id, registered_by, current_holder, status, condition, unique_code) VALUES
+(1, 1, NULL, 'available', 'good', 'BC-2024-0001'),
+(2, 1, NULL, 'available', 'fair', 'BC-2024-0002'),
+(3, 3, NULL, 'available', 'new',  'BC-2024-0003'),
+(4, 2, NULL, 'available', 'good', 'BC-2024-0004'),
+(5, 4, NULL, 'available', 'good', 'BC-2024-0005'),
+(1, 5, NULL, 'available', 'poor', 'BC-2024-0006'),
+(6, 6, NULL, 'available', 'good', 'BC-2024-0007'),
+(7, 3, NULL, 'available', 'new',  'BC-2024-0008'),
+(2, 4, 4,    'taken',     'poor', 'BC-2024-0009'),
+(4, 1, NULL, 'available', 'fair', 'BC-2024-0010');
 
 INSERT INTO transfers (copy_id, from_user_id, to_user_id, drop_point_id, transfer_date, note, condition_at_transfer) VALUES
 (3,  NULL, 3, 1, '2024-09-20 10:00', 'Первичный выпуск в оборот', 'new'),

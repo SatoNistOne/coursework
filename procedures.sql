@@ -400,19 +400,28 @@ BEGIN
         RAISE EXCEPTION 'Получатель не может брать книги. %', v_reason;
     END IF;
 
-    INSERT INTO transfers
-        (copy_id, from_user_id, to_user_id, drop_point_id, note, condition_at_transfer)
-    VALUES
-        (p_copy_id, p_from_user_id, p_to_user_id, p_drop_point_id, p_note, p_condition_at_handoff);
+    SAVEPOINT before_insert;
 
-    RAISE NOTICE 'Книга "%" передана пользователю ID %', v_book_title, p_to_user_id;
+    BEGIN
+        INSERT INTO transfers
+            (copy_id, from_user_id, to_user_id, drop_point_id, note, condition_at_transfer)
+        VALUES
+            (p_copy_id, p_from_user_id, p_to_user_id, p_drop_point_id, p_note, p_condition_at_handoff);
+
+        RAISE NOTICE 'Книга "%" передана пользователю ID %', v_book_title, p_to_user_id;
+    EXCEPTION
+        WHEN OTHERS THEN
+            ROLLBACK TO SAVEPOINT before_insert;
+            RAISE EXCEPTION 'Ошибка при вставке передачи: %', SQLERRM;
+    END;
+
 EXCEPTION
     WHEN foreign_key_violation THEN
         RAISE EXCEPTION 'Несуществующий пользователь или точка обмена';
     WHEN check_violation THEN
         RAISE EXCEPTION 'Нарушение ограничения данных';
     WHEN OTHERS THEN
-        RAISE EXCEPTION 'Ошибка при передаче (copy_id=%)', p_copy_id;
+        RAISE EXCEPTION 'Ошибка при передаче (copy_id=%): %', p_copy_id, SQLERRM;
 END;
 $$;
 
@@ -457,7 +466,7 @@ BEGIN
         v_book_title, v_unique_code, COALESCE(p_reason, 'не указана'), p_reported_by;
 EXCEPTION
     WHEN OTHERS THEN
-        RAISE EXCEPTION 'Ошибка при изменении статуса';
+        RAISE EXCEPTION 'Ошибка при изменении статуса: %', SQLERRM;
 END;
 $$;
 
